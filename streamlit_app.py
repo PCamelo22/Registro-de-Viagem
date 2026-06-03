@@ -412,7 +412,7 @@ elif pagina == "📊 Painel":
     if not dados:
         st.info("Sem dados para exibir.")
     else:
-        # BG_CHART definido globalmente como CHART_BG
+        # CHART_BG definido globalmente como CHART_BG
 
         c1, c2 = st.columns(2)
 
@@ -457,12 +457,12 @@ elif pagina == "📊 Painel":
                 hole=0.4,
             )
             fig2.update_layout(
-                paper_bgcolor=BG_CHART,
+                paper_bgcolor=CHART_BG,
                 height=360,
                 margin=dict(t=40, b=20, l=20, r=20),
                 title_font=dict(size=14, color="#1A2530"),
                 font=dict(color="#1A2530"),
-                legend=dict(bgcolor=BG_CHART),
+                legend=dict(bgcolor=CHART_BG),
             )
             fig2.update_traces(textposition="inside", textinfo="percent+label")
             st.plotly_chart(fig2, use_container_width=True)
@@ -624,5 +624,6 @@ elif pagina == "⚙ Configurações":
             try:
                 import supabase; st.success("supabase ✅")
             except: st.warning("supabase ❌  (pip install supabase)")
+
 
 
