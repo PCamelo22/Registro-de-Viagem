@@ -3,7 +3,7 @@
 streamlit_app.py — MF Viagens e Hotéis
 Execute localmente: streamlit run streamlit_app.py
 """
-import json, uuid
+import json, uuid, base64, time
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -30,6 +30,76 @@ st.set_page_config(
 BRAND      = "#4A7A9B"
 BRAND_DARK = "#3A6282"
 
+# ── Splash screen ────────────────────────────────────────────────────────────
+def _show_splash():
+    logo_path = Path(__file__).parent / "LOGO 13.jpeg"
+    logo_b64  = ""
+    if logo_path.exists():
+        with open(logo_path, "rb") as f:
+            logo_b64 = base64.b64encode(f.read()).decode()
+
+    logo_html = (
+        f'<img src="data:image/jpeg;base64,{logo_b64}" '
+        f'style="width:200px;height:200px;object-fit:contain;'
+        f'border-radius:16px;margin-bottom:32px;'
+        f'box-shadow:0 8px 32px rgba(0,0,0,0.3);">'
+        if logo_b64 else
+        '<div style="font-size:72px;margin-bottom:32px;">✈</div>'
+    )
+
+    st.markdown(f"""
+    <style>
+    #splash-overlay {{
+        position: fixed; inset: 0; z-index: 9999;
+        background: linear-gradient(135deg, #1a2f45 0%, #4A7A9B 50%, #1a2f45 100%);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        animation: fadeIn 0.8s ease;
+    }}
+    @keyframes fadeIn {{
+        from {{ opacity: 0; transform: scale(0.95); }}
+        to   {{ opacity: 1; transform: scale(1); }}
+    }}
+    @keyframes pulse {{
+        0%, 100% {{ transform: scale(1); }}
+        50%       {{ transform: scale(1.04); }}
+    }}
+    .splash-logo {{ animation: pulse 2.5s ease-in-out infinite; }}
+    .splash-title {{
+        color: white; font-size: 32px; font-weight: 800;
+        letter-spacing: 3px; margin-bottom: 8px;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+    }}
+    .splash-sub {{
+        color: rgba(255,255,255,0.7); font-size: 15px;
+        letter-spacing: 5px; margin-bottom: 48px;
+    }}
+    .splash-btn {{
+        background: white; color: #4A7A9B;
+        border: none; padding: 14px 48px;
+        font-size: 16px; font-weight: 700;
+        border-radius: 50px; cursor: pointer;
+        letter-spacing: 2px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+        transition: all 0.2s;
+    }}
+    .splash-btn:hover {{
+        transform: translateY(-2px);
+        box-shadow: 0 8px 28px rgba(0,0,0,0.35);
+    }}
+    </style>
+
+    <div id="splash-overlay">
+        <div class="splash-logo">{logo_html}</div>
+        <div class="splash-title">MF VIAGENS E HOTÉIS</div>
+        <div class="splash-sub">SISTEMA DE REGISTRO</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    time.sleep(2.5)
+    st.session_state["splash_shown"] = True
+    st.rerun()
+
 # ── Inicialização do estado ───────────────────────────────────────────────────
 def _init_state():
     defaults = {
@@ -40,12 +110,17 @@ def _init_state():
         "cfg_unlocked": False,
         "cfg":          load_cfg(),
         "dark_mode":    False,
+        "splash_shown": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
 _init_state()
+
+# Mostra splash apenas na primeira abertura da sessão
+if not st.session_state["splash_shown"]:
+    _show_splash()
 cfg       = st.session_state["cfg"]
 dark      = st.session_state["dark_mode"]
 BG        = "#1E293B" if dark else "#F0F4F8"
