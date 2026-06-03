@@ -1,0 +1,15 @@
+# Dados locais — não sobem para o Git
+viagens.json
+config.json
+backups/
+anexos/
+__pycache__/
+*.pyc
+*.pyo
+.env
+
+# Segredos do Streamlit — NUNCA subir
+.streamlit/secrets.toml
+
+# App Tkinter (opcional — remova se quiser subir também)
+# registro de viagem.py
