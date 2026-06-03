@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 streamlit_app.py — MF Viagens e Hotéis
 Execute localmente: streamlit run streamlit_app.py
@@ -11,12 +11,13 @@ from datetime import datetime
 from pathlib import Path
 
 from core import (
-    load_data, save_data, load_cfg, save_cfg, backup_auto,
+    load_cfg, save_cfg, backup_auto,
     days, calc_totais, salvar_registro, gerar_canhoto,
     totais_painel, exportar_excel_bytes, enviar_email,
     hash_senha, verificar_senha, cifrar, decifrar, fmt_brl,
     TIPOS_PASSAGEM, TIPOS_TRANSPORTE,
 )
+from db import db_load, db_save, db_delete, db_migrar_json, db_disponivel
 
 # ── Configuração da página ────────────────────────────────────────────────────
 st.set_page_config(
@@ -92,7 +93,7 @@ pagina = st.sidebar.radio(
 )
 st.sidebar.markdown("---")
 
-dados_all = load_data()
+dados_all = db_load()
 total_acc = sum(d.get("val_total", d.get("valor",0)) for d in dados_all)
 st.sidebar.markdown(f"**{len(dados_all)}** viagens registradas")
 st.sidebar.markdown(f"**{fmt_brl(total_acc)}** total acumulado")
@@ -262,7 +263,8 @@ if pagina == "📋 Novo Registro":
                 "materiais":  list(st.session_state["materiais"]),
                 "pix":pix,"obs":obs,
             }
-            reg = salvar_registro(reg, cfg)
+            reg = salvar_registro(reg, cfg)   # calcula totais
+            db_save(reg)                        # persiste no banco
             canhoto = gerar_canhoto(reg, cfg)
             st.success(f"✅ Viagem salva! Total: {fmt_brl(reg['val_total'])}")
             st.text_area("Canhoto gerado:", canhoto, height=400)
@@ -275,7 +277,7 @@ if pagina == "📋 Novo Registro":
 elif pagina == "📜 Histórico":
     st.subheader("Histórico de Viagens")
 
-    dados = load_data()
+    dados = db_load()
     if not dados:
         st.info("Nenhuma viagem registrada ainda.")
     else:
@@ -350,7 +352,7 @@ elif pagina == "📊 Painel":
     </style>
     """, unsafe_allow_html=True)
 
-    dados = load_data()
+    dados = db_load()
     anos  = ["Todos"] + sorted({d.get("ida","")[-4:]
              for d in dados if len(d.get("ida",""))==10}, reverse=True)
 
@@ -567,11 +569,32 @@ elif pagina == "⚙ Configurações":
 
         with tab3:
             from core import DATA_FILE, CONFIG_FILE, BACKUP_DIR
+
+            # Status do banco
+            st.markdown("**Banco de dados (Supabase):**")
+            if db_disponivel():
+                st.success("✅ Supabase conectado")
+                if st.button("📤 Migrar viagens.json → Supabase", type="primary"):
+                    n = db_migrar_json()
+                    if n:
+                        st.success(f"{n} registro(s) migrado(s) com sucesso!")
+                    else:
+                        st.warning("Nenhum dado local encontrado ou erro na migração.")
+            else:
+                st.warning("⚠️ Supabase não configurado — usando JSON local")
+                st.caption("Adicione SUPABASE_URL e SUPABASE_KEY nos Secrets do Streamlit.")
+
+            st.markdown("---")
+            st.markdown("**Arquivos locais:**")
             st.code(f"Dados    : {DATA_FILE}\nConfig   : {CONFIG_FILE}\nBackups  : {BACKUP_DIR}")
-            st.markdown("**Dependências opcionais:**")
+            st.markdown("**Dependências:**")
             try:
                 import openpyxl; st.success("openpyxl ✅")
             except: st.warning("openpyxl ❌  (pip install openpyxl)")
             try:
                 import cryptography; st.success("cryptography ✅")
             except: st.warning("cryptography ❌  (pip install cryptography)")
+            try:
+                import supabase; st.success("supabase ✅")
+            except: st.warning("supabase ❌  (pip install supabase)")
+
