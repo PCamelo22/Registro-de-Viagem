@@ -324,62 +324,154 @@ elif pagina == "📜 Histórico":
 # PÁGINA: PAINEL
 # =============================================================================
 elif pagina == "📊 Painel":
-    st.subheader("Painel de Gastos")
+
+    # CSS dos cards coloridos
+    st.markdown("""
+    <style>
+    .painel-card {
+        border-radius: 12px;
+        padding: 18px 16px 14px 16px;
+        color: white;
+        margin-bottom: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    .painel-card .label {
+        font-size: 12px;
+        opacity: 0.85;
+        margin-bottom: 6px;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+    .painel-card .valor {
+        font-size: 22px;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     dados = load_data()
     anos  = ["Todos"] + sorted({d.get("ida","")[-4:]
              for d in dados if len(d.get("ida",""))==10}, reverse=True)
-    ano_sel = st.selectbox("Filtrar por ano", anos, key="painel_ano")
+
+    col_titulo, col_filtro = st.columns([3,1])
+    col_titulo.subheader("📊 Painel de Gastos")
+    ano_sel = col_filtro.selectbox("Ano", anos, key="painel_ano", label_visibility="collapsed")
     if ano_sel != "Todos":
         dados = [d for d in dados if d.get("ida","")[-4:] == ano_sel]
 
     t = totais_painel(dados)
 
-    # Cards
-    c1,c2,c3,c4,c5,c6 = st.columns(6)
-    c1.metric("✈ Diárias",    fmt_brl(t["diarias"]))
-    c2.metric("🎫 Passagens",  fmt_brl(t["passagens"]))
-    c3.metric("🚗 Transporte", fmt_brl(t["transporte"]))
-    c4.metric("🏨 Hospedagem", fmt_brl(t["hospedagem"]))
-    c5.metric("📦 Materiais",  fmt_brl(t["materiais"]))
-    c6.metric("💰 Total",      fmt_brl(t["total"]))
+    # Cards coloridos via HTML
+    cards = [
+        ("✈  Diárias",     fmt_brl(t["diarias"]),    "#4A7A9B"),
+        ("🎫  Passagens",   fmt_brl(t["passagens"]),  "#2E8B6E"),
+        ("🚗  Transporte",  fmt_brl(t["transporte"]), "#C07A2E"),
+        ("🏨  Hospedagem",  fmt_brl(t["hospedagem"]), "#7B3DAF"),
+        ("📦  Materiais",   fmt_brl(t["materiais"]),  "#AF3D3D"),
+        (f"💰  Total  ({t['viagens']} viagens)", fmt_brl(t["total"]), "#1A3A5A"),
+    ]
+    cols = st.columns(6)
+    for col, (label, valor, cor) in zip(cols, cards):
+        col.markdown(f"""
+        <div class="painel-card" style="background:{cor};">
+            <div class="label">{label}</div>
+            <div class="valor">{valor}</div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    st.markdown("---")
+    st.markdown("<br>", unsafe_allow_html=True)
 
-    if dados:
-        # Gráfico por categoria
-        df_cat = pd.DataFrame([
-            {"Categoria":"Diárias",    "Valor":t["diarias"],    "Cor":"#4A7A9B"},
-            {"Categoria":"Passagens",  "Valor":t["passagens"],  "Cor":"#2E8B6E"},
-            {"Categoria":"Transporte", "Valor":t["transporte"], "Cor":"#C07A2E"},
-            {"Categoria":"Hospedagem", "Valor":t["hospedagem"], "Cor":"#8B3DAF"},
-            {"Categoria":"Materiais",  "Valor":t["materiais"],  "Cor":"#AF3D3D"},
-        ])
-        fig = px.bar(df_cat, x="Categoria", y="Valor", color="Categoria",
-                     color_discrete_map={r["Categoria"]:r["Cor"] for _,r in df_cat.iterrows()},
-                     title="Distribuição de Gastos por Categoria",
-                     text_auto=".2s")
-        fig.update_layout(showlegend=False, plot_bgcolor="white",
-                          paper_bgcolor="white", height=380)
-        fig.update_traces(textposition="outside")
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Evolução por viagem
-        rows = []
-        for d in dados:
-            rows.append({
-                "Viagem": f"{d.get('nome','')[:12]} / {d.get('destino','')[:12]}",
-                "Total":  d.get("val_total", d.get("valor",0)),
-                "Data":   d.get("ida",""),
-            })
-        df_ev = pd.DataFrame(rows).sort_values("Data")
-        fig2 = px.bar(df_ev, x="Viagem", y="Total",
-                      title="Total por Viagem",
-                      color_discrete_sequence=[BRAND])
-        fig2.update_layout(plot_bgcolor="white", paper_bgcolor="white", height=320)
-        st.plotly_chart(fig2, use_container_width=True)
-    else:
+    if not dados:
         st.info("Sem dados para exibir.")
+    else:
+        BG_CHART = "#F0F4F8"
+
+        c1, c2 = st.columns(2)
+
+        # Gráfico 1 — Por categoria
+        with c1:
+            df_cat = pd.DataFrame([
+                {"Categoria":"Diárias",    "Valor":t["diarias"],    "Cor":"#4A7A9B"},
+                {"Categoria":"Passagens",  "Valor":t["passagens"],  "Cor":"#2E8B6E"},
+                {"Categoria":"Transporte", "Valor":t["transporte"], "Cor":"#C07A2E"},
+                {"Categoria":"Hospedagem", "Valor":t["hospedagem"], "Cor":"#7B3DAF"},
+                {"Categoria":"Materiais",  "Valor":t["materiais"],  "Cor":"#AF3D3D"},
+            ])
+            fig = px.bar(
+                df_cat, x="Categoria", y="Valor", color="Categoria",
+                color_discrete_map={r["Categoria"]:r["Cor"] for _,r in df_cat.iterrows()},
+                title="Gastos por Categoria",
+                text_auto=".2s",
+            )
+            fig.update_layout(
+                showlegend=False,
+                plot_bgcolor=BG_CHART,
+                paper_bgcolor=BG_CHART,
+                height=360,
+                margin=dict(t=40, b=20, l=20, r=20),
+                title_font=dict(size=14, color="#1A2530"),
+                font=dict(color="#1A2530"),
+            )
+            fig.update_traces(textposition="outside", marker_line_width=0)
+            fig.update_yaxes(showgrid=True, gridcolor="#DDE4EA")
+            fig.update_xaxes(showgrid=False)
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Gráfico 2 — Pizza
+        with c2:
+            df_pie = df_cat[df_cat["Valor"] > 0]
+            fig2 = px.pie(
+                df_pie, names="Categoria", values="Valor",
+                color="Categoria",
+                color_discrete_map={r["Categoria"]:r["Cor"] for _,r in df_pie.iterrows()},
+                title="Proporção por Categoria",
+                hole=0.4,
+            )
+            fig2.update_layout(
+                paper_bgcolor=BG_CHART,
+                height=360,
+                margin=dict(t=40, b=20, l=20, r=20),
+                title_font=dict(size=14, color="#1A2530"),
+                font=dict(color="#1A2530"),
+                legend=dict(bgcolor=BG_CHART),
+            )
+            fig2.update_traces(textposition="inside", textinfo="percent+label")
+            st.plotly_chart(fig2, use_container_width=True)
+
+        # Gráfico 3 — Total por viagem (largura total)
+        rows_ev = []
+        for d in dados:
+            rows_ev.append({
+                "Viajante": d.get("nome","")[:16],
+                "Destino":  d.get("destino","")[:14],
+                "Total":    d.get("val_total", d.get("valor",0)),
+                "Data":     d.get("ida",""),
+            })
+        df_ev = pd.DataFrame(rows_ev).sort_values("Data")
+        df_ev["Label"] = df_ev["Viajante"] + " / " + df_ev["Destino"]
+
+        fig3 = px.bar(
+            df_ev, x="Label", y="Total",
+            title="Total por Viagem",
+            color="Total",
+            color_continuous_scale=["#D6E8F5", BRAND, "#1A3A5A"],
+            text_auto=".2s",
+        )
+        fig3.update_layout(
+            plot_bgcolor=BG_CHART,
+            paper_bgcolor=BG_CHART,
+            height=340,
+            margin=dict(t=40, b=60, l=20, r=20),
+            title_font=dict(size=14, color="#1A2530"),
+            font=dict(color="#1A2530"),
+            coloraxis_showscale=False,
+            xaxis_tickangle=-30,
+        )
+        fig3.update_traces(textposition="outside", marker_line_width=0)
+        fig3.update_yaxes(showgrid=True, gridcolor="#DDE4EA")
+        fig3.update_xaxes(showgrid=False)
+        st.plotly_chart(fig3, use_container_width=True)
 
 # =============================================================================
 # PÁGINA: CONFIGURAÇÕES
