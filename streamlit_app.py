@@ -170,24 +170,58 @@ if pagina == "📋 Novo Registro":
     # ── Seção C: Passagens ────────────────────────────────────────────────────
     with st.expander(f"C  Passagens  ({len(st.session_state['passagens'])} adicionadas)"):
         with st.form("form_passagem", clear_on_submit=True):
-            c1,c2,c3,c4,c5 = st.columns([1,2,1,1,1])
-            pt = c1.selectbox("Tipo", TIPOS_PASSAGEM, key="pt")
-            tr = c2.text_input("Trecho (ex: BSB>GRU)", key="ptrecho")
-            dt = c3.text_input("Data DD/MM/AAAA", key="pdt")
-            hr = c4.text_input("Hora HH:MM", key="phr")
-            vl = c5.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl")
-            lc = st.text_input("Localizador", key="plc")
+
+            # Linha 1 — tipo, trecho e ida/volta
+            c1, c2, c3 = st.columns([1, 3, 1])
+            pt      = c1.selectbox("Tipo", TIPOS_PASSAGEM, key="pt")
+            tr      = c2.text_input("Trecho ida (ex: BSB > GRU)", key="ptrecho")
+            ida_vta = c3.checkbox("Ida e Volta", key="p_ida_vta", value=False)
+
+            # Linha 2 — dados da IDA
+            st.markdown("**✈ Ida**")
+            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+            dt  = c1.text_input("Data DD/MM/AAAA", key="pdt")
+            hr  = c2.text_input("Hora HH:MM", key="phr")
+            vl  = c3.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl")
+            lc  = c4.text_input("Localizador", key="plc")
+
+            # Linha 3 — dados da VOLTA (aparece sempre mas só usada se checkbox marcado)
+            st.markdown("**↩ Volta**")
+            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+            tr_v = c1.text_input("Trecho volta (preenchido automaticamente)",
+                                  value=(" > ".join(reversed(tr.split(" > "))) if " > " in tr else ""),
+                                  key="ptrecho_v", disabled=not ida_vta)
+            dt_v = c2.text_input("Data DD/MM/AAAA ", key="pdt_v",
+                                  value=volta if ida_vta else "",
+                                  disabled=not ida_vta)
+            vl_v = c3.number_input("Valor R$ ", min_value=0.0, step=10.0,
+                                    key="pvl_v", disabled=not ida_vta)
+            lc_v = c4.text_input("Localizador ", key="plc_v", disabled=not ida_vta)
+
             if st.form_submit_button("➕ Adicionar Passagem"):
-                st.session_state["passagens"].append({
-                    "tipo":pt,"trecho":tr,"data":dt,"hora":hr,
-                    "valor":vl,"localizador":lc,"link":"","sentido":"Ida"
-                })
-                st.rerun()
+                if tr and dt:
+                    st.session_state["passagens"].append({
+                        "tipo":pt, "trecho":tr, "data":dt, "hora":hr,
+                        "valor":vl, "localizador":lc, "link":"", "sentido":"Ida"
+                    })
+                    if ida_vta and tr_v and dt_v:
+                        # trecho inverso automático
+                        trecho_volta = tr_v or (" > ".join(reversed(tr.split(" > "))) if " > " in tr else tr)
+                        st.session_state["passagens"].append({
+                            "tipo":pt, "trecho":trecho_volta, "data":dt_v, "hora":"",
+                            "valor":vl_v, "localizador":lc_v, "link":"", "sentido":"Volta"
+                        })
+                    st.rerun()
 
         for i, p in enumerate(st.session_state["passagens"]):
+            sentido_icon = "✈" if p.get("sentido","") != "Volta" else "↩"
             cc1, cc2 = st.columns([9,1])
-            cc1.markdown(f"✈ **[{p['tipo']}]** {p['trecho']} — {p['data']} {p['hora']} — "
-                         f"**{fmt_brl(p['valor'])}** | Loc: {p.get('localizador','')}")
+            cc1.markdown(
+                f"{sentido_icon} **[{p['tipo']}]** `{p.get('sentido','Ida')}` "
+                f"{p['trecho']} — {p['data']} {p.get('hora','')} — "
+                f"**{fmt_brl(p['valor'])}**"
+                + (f" | Loc: {p['localizador']}" if p.get('localizador') else "")
+            )
             if cc2.button("🗑", key=f"dpass{i}"):
                 st.session_state["passagens"].pop(i); st.rerun()
 
