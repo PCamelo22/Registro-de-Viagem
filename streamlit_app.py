@@ -167,36 +167,33 @@ if pagina == "📋 Novo Registro":
         else:
             hotel_data = {"selecionado":"Nao","nome":"","link":"","valor_noite":0.0}
 
-    # ── Seção C: Passagens ────────────────────────────────────────────────────
+    # ── Secao C: Passagens
     with st.expander(f"C  Passagens  ({len(st.session_state['passagens'])} adicionadas)"):
+
+        ida_vta = st.checkbox("✈ Ida e Volta", key="p_ida_vta")
+
         with st.form("form_passagem", clear_on_submit=True):
+            c1, c2 = st.columns([1, 3])
+            pt = c1.selectbox("Tipo", TIPOS_PASSAGEM, key="pt")
+            tr = c2.text_input("Trecho ida (ex: BSB > GRU)", key="ptrecho")
 
-            # Linha 1 — tipo, trecho e ida/volta
-            c1, c2, c3 = st.columns([1, 3, 1])
-            pt      = c1.selectbox("Tipo", TIPOS_PASSAGEM, key="pt")
-            tr      = c2.text_input("Trecho ida (ex: BSB > GRU)", key="ptrecho")
-            ida_vta = c3.checkbox("Ida e Volta", key="p_ida_vta", value=False)
-
-            # Linha 2 — dados da IDA
             st.markdown("**✈ Ida**")
             c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-            dt  = c1.text_input("Data DD/MM/AAAA", key="pdt")
-            hr  = c2.text_input("Hora HH:MM", key="phr")
-            vl  = c3.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl")
-            lc  = c4.text_input("Localizador", key="plc")
+            dt = c1.text_input("Data DD/MM/AAAA", key="pdt")
+            hr = c2.text_input("Hora HH:MM", key="phr")
+            vl = c3.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl")
+            lc = c4.text_input("Localizador", key="plc")
 
-            # Linha 3 — dados da VOLTA (aparece sempre mas só usada se checkbox marcado)
-            st.markdown("**↩ Volta**")
-            c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-            tr_v = c1.text_input("Trecho volta (preenchido automaticamente)",
-                                  value=(" > ".join(reversed(tr.split(" > "))) if " > " in tr else ""),
-                                  key="ptrecho_v", disabled=not ida_vta)
-            dt_v = c2.text_input("Data DD/MM/AAAA ", key="pdt_v",
-                                  value=volta if ida_vta else "",
-                                  disabled=not ida_vta)
-            vl_v = c3.number_input("Valor R$ ", min_value=0.0, step=10.0,
-                                    key="pvl_v", disabled=not ida_vta)
-            lc_v = c4.text_input("Localizador ", key="plc_v", disabled=not ida_vta)
+            tr_v = dt_v = hr_v = lc_v = ""
+            vl_v = 0.0
+            if ida_vta:
+                st.markdown("**↩ Volta**")
+                c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
+                tr_v = c1.text_input("Trecho volta (ex: GRU > BSB)", key="ptrecho_v")
+                dt_v = c2.text_input("Data DD/MM/AAAA", key="pdt_v")
+                hr_v = c3.text_input("Hora HH:MM", key="phr_v")
+                vl_v = c4.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl_v")
+                lc_v = st.text_input("Localizador volta", key="plc_v")
 
             if st.form_submit_button("➕ Adicionar Passagem"):
                 if tr and dt:
@@ -205,24 +202,24 @@ if pagina == "📋 Novo Registro":
                         "valor":vl, "localizador":lc, "link":"", "sentido":"Ida"
                     })
                     if ida_vta and tr_v and dt_v:
-                        # trecho inverso automático
-                        trecho_volta = tr_v or (" > ".join(reversed(tr.split(" > "))) if " > " in tr else tr)
                         st.session_state["passagens"].append({
-                            "tipo":pt, "trecho":trecho_volta, "data":dt_v, "hora":"",
+                            "tipo":pt, "trecho":tr_v, "data":dt_v, "hora":hr_v,
                             "valor":vl_v, "localizador":lc_v, "link":"", "sentido":"Volta"
                         })
                     st.rerun()
 
         for i, p in enumerate(st.session_state["passagens"]):
-            sentido_icon = "✈" if p.get("sentido","") != "Volta" else "↩"
+            icon    = "✈" if p.get("sentido","") != "Volta" else "↩"
+            sentido = p.get("sentido","Ida")
             cc1, cc2 = st.columns([9,1])
             cc1.markdown(
-                f"{sentido_icon} **[{p['tipo']}]** `{p.get('sentido','Ida')}` "
+                f"{icon} **[{p['tipo']}]** `{sentido}` "
                 f"{p['trecho']} — {p['data']} {p.get('hora','')} — "
                 f"**{fmt_brl(p['valor'])}**"
                 + (f" | Loc: {p['localizador']}" if p.get('localizador') else "")
             )
             if cc2.button("🗑", key=f"dpass{i}"):
+                st.session_state["passagens"].pop(i); st.rerun()
                 st.session_state["passagens"].pop(i); st.rerun()
 
     # ── Seção D: Transporte ───────────────────────────────────────────────────
