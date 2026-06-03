@@ -27,31 +27,8 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-BRAND = "#4A7A9B"
-
-# ── CSS customizado ───────────────────────────────────────────────────────────
-st.markdown(f"""
-<style>
-    .main-header {{
-        background: {BRAND};
-        color: white;
-        padding: 16px 24px;
-        border-radius: 8px;
-        margin-bottom: 20px;
-        text-align: center;
-    }}
-    .card {{
-        background: white;
-        border-radius: 10px;
-        padding: 16px;
-        border-left: 5px solid {BRAND};
-        margin-bottom: 8px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-    }}
-    .stMetric label {{ font-size: 13px !important; }}
-    div[data-testid="stSidebarNav"] {{ display: none; }}
-</style>
-""", unsafe_allow_html=True)
+BRAND      = "#4A7A9B"
+BRAND_DARK = "#3A6282"
 
 # ── Inicialização do estado ───────────────────────────────────────────────────
 def _init_state():
@@ -62,28 +39,68 @@ def _init_state():
         "cfg_senha":    "",
         "cfg_unlocked": False,
         "cfg":          load_cfg(),
+        "dark_mode":    False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
 _init_state()
-cfg = st.session_state["cfg"]
+cfg       = st.session_state["cfg"]
+dark      = st.session_state["dark_mode"]
+BG        = "#1E293B" if dark else "#F0F4F8"
+SURFACE   = "#0F172A" if dark else "#FFFFFF"
+TEXT      = "#F1F5F9" if dark else "#1A2530"
+TEXT_DIM  = "#94A3B8" if dark else "#5A6978"
+CHART_BG  = "#1E293B" if dark else "#F0F4F8"
+CHART_TPL = "plotly_dark" if dark else "plotly_white"
+
 backup_auto(cfg)
 
-# ── Credenciais do Streamlit Secrets (opcional) ───────────────────────────────
-def _get_from_secrets(key: str, fallback: str = "") -> str:
-    try:
-        return st.secrets.get(key, fallback)
-    except Exception:
-        return fallback
+# ── CSS dinâmico (dark / light) ───────────────────────────────────────────────
+st.markdown(f"""
+<style>
+    .stApp {{
+        background-color: {BG} !important;
+    }}
+    section[data-testid="stSidebar"] {{
+        background-color: {"#0F172A" if dark else "#FFFFFF"} !important;
+    }}
+    .stApp, .stApp p, .stApp label, .stApp span, .stApp div {{
+        color: {TEXT} !important;
+    }}
+    .main-header {{
+        background: {BRAND};
+        color: white;
+        padding: 16px 24px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        text-align: center;
+    }}
+    .painel-card {{
+        border-radius: 12px;
+        padding: 18px 16px 14px 16px;
+        color: white;
+        margin-bottom: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }}
+    .painel-card .label {{
+        font-size: 12px; opacity: 0.85;
+        margin-bottom: 6px; text-transform: uppercase;
+    }}
+    .painel-card .valor {{
+        font-size: 22px; font-weight: 700;
+    }}
+    div[data-testid="stSidebarNav"] {{ display: none; }}
+</style>
+""", unsafe_allow_html=True)
 
 # ── Sidebar ───────────────────────────────────────────────────────────────────
 logo_path = Path(__file__).parent / "LOGO 13.jpeg"
 if logo_path.exists():
     st.sidebar.image(str(logo_path), width=160)
 else:
-    st.sidebar.markdown(f"## ✈ MF Viagens")
+    st.sidebar.markdown("## ✈ MF Viagens")
 
 st.sidebar.markdown("---")
 pagina = st.sidebar.radio(
@@ -98,10 +115,17 @@ total_acc = sum(d.get("val_total", d.get("valor",0)) for d in dados_all)
 st.sidebar.markdown(f"**{len(dados_all)}** viagens registradas")
 st.sidebar.markdown(f"**{fmt_brl(total_acc)}** total acumulado")
 
+# Toggle dark/light
+st.sidebar.markdown("---")
+tema_label = "☀️ Modo Claro" if dark else "🌙 Modo Escuro"
+if st.sidebar.button(tema_label, use_container_width=True):
+    st.session_state["dark_mode"] = not dark
+    st.rerun()
+
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="main-header">
-    <h2 style="margin:0; font-size:22px;">✈  MF VIAGENS E HOTÉIS</h2>
+    <h2 style="margin:0; font-size:22px; color:white !important;">✈  MF VIAGENS E HOTÉIS</h2>
 </div>
 """, unsafe_allow_html=True)
 
@@ -388,7 +412,7 @@ elif pagina == "📊 Painel":
     if not dados:
         st.info("Sem dados para exibir.")
     else:
-        BG_CHART = "#F0F4F8"
+        # BG_CHART definido globalmente como CHART_BG
 
         c1, c2 = st.columns(2)
 
@@ -409,8 +433,9 @@ elif pagina == "📊 Painel":
             )
             fig.update_layout(
                 showlegend=False,
-                plot_bgcolor=BG_CHART,
-                paper_bgcolor=BG_CHART,
+                plot_bgcolor=CHART_BG,
+                paper_bgcolor=CHART_BG,
+                template=CHART_TPL,
                 height=360,
                 margin=dict(t=40, b=20, l=20, r=20),
                 title_font=dict(size=14, color="#1A2530"),
@@ -462,8 +487,9 @@ elif pagina == "📊 Painel":
             text_auto=".2s",
         )
         fig3.update_layout(
-            plot_bgcolor=BG_CHART,
-            paper_bgcolor=BG_CHART,
+            plot_bgcolor=CHART_BG,
+                paper_bgcolor=CHART_BG,
+                template=CHART_TPL,
             height=340,
             margin=dict(t=40, b=60, l=20, r=20),
             title_font=dict(size=14, color="#1A2530"),
@@ -598,4 +624,5 @@ elif pagina == "⚙ Configurações":
             try:
                 import supabase; st.success("supabase ✅")
             except: st.warning("supabase ❌  (pip install supabase)")
+
 

@@ -1,18 +1,23 @@
 # -*- coding: utf-8 -*-
 """
-db.py — Camada de acesso ao banco Supabase.
-Se as credenciais não estiverem configuradas, cai para JSON local (core.py).
+db.py — Acesso ao Supabase via REST API (httpx).
+Compatível com o novo formato de chaves sb_publishable_ / sb_secret_.
+Fallback automático para JSON local se não configurado.
 """
 import os, json
-from pathlib import Path
 
 try:
-    from supabase import create_client, Client
-    _SUPABASE_OK = True
+    import httpx
+    _HTTPX = True
 except ImportError:
-    _SUPABASE_OK = False
+    _HTTPX = False
 
-# Credenciais — lidas do ambiente ou do streamlit secrets
+REST_SUFFIX = "/rest/v1"
+HEADERS_BASE = {
+    "Content-Type":  "application/json",
+    "Prefer":        "return=representation",
+}
+
 def _get_creds():
     url = os.environ.get("SUPABASE_URL", "")
     key = os.environ.get("SUPABASE_KEY", "")
@@ -23,41 +28,46 @@ def _get_creds():
             key = st.secrets.get("SUPABASE_KEY", "")
         except Exception:
             pass
-    return url.strip(), key.strip()
+    return url.strip().rstrip("/"), key.strip()
 
-def _client() -> "Client | None":
-    if not _SUPABASE_OK:
-        return None
+def _headers():
+    _, key = _get_creds()
+    return {**HEADERS_BASE, "apikey": key, "Authorization": f"Bearer {key}"}
+
+def _base_url():
+    url, _ = _get_creds()
+    return f"{url}{REST_SUFFIX}"
+
+def db_disponivel() -> bool:
+    if not _HTTPX:
+        return False
     url, key = _get_creds()
-    if not url or not key:
-        return None
-    try:
-        return create_client(url, key)
-    except Exception:
-        return None
+    return bool(url and key)
 
-# ── CRUD principal ────────────────────────────────────────────────────────────
+# ── CRUD ──────────────────────────────────────────────────────────────────────
 def db_load() -> list:
-    """Carrega todas as viagens do Supabase. Fallback para JSON local."""
-    sb = _client()
-    if sb is None:
+    if not db_disponivel():
         from core import load_data
         return load_data()
     try:
-        res = sb.table("viagens").select("*").order("data_registro", desc=True).execute()
-        return res.data or []
+        r = httpx.get(
+            f"{_base_url()}/viagens",
+            headers=_headers(),
+            params={"order": "data_registro.desc"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        return r.json() or []
     except Exception as e:
         print(f"[db] Erro ao carregar: {e} — usando JSON local")
         from core import load_data
         return load_data()
 
 def db_save(reg: dict) -> dict:
-    """Insere ou atualiza um registro no Supabase."""
-    sb = _client()
-    if sb is None:
-        from core import save_data, load_data
+    if not db_disponivel():
+        from core import load_data, save_data
         dados = load_data()
-        idx = next((i for i,d in enumerate(dados) if d.get("id")==reg.get("id")), None)
+        idx = next((i for i, d in enumerate(dados) if d.get("id") == reg.get("id")), None)
         if idx is not None:
             dados[idx] = reg
         else:
@@ -65,41 +75,74 @@ def db_save(reg: dict) -> dict:
         save_data(dados)
         return reg
     try:
-        sb.table("viagens").upsert(reg).execute()
+        hdrs = {**_headers(), "Prefer": "resolution=merge-duplicates,return=representation"}
+        r = httpx.post(
+            f"{_base_url()}/viagens",
+            headers=hdrs,
+            content=json.dumps(reg),
+            timeout=10,
+        )
+        r.raise_for_status()
         return reg
     except Exception as e:
         print(f"[db] Erro ao salvar: {e}")
         return reg
 
 def db_delete(reg_id: str) -> bool:
-    """Remove um registro pelo id."""
-    sb = _client()
-    if sb is None:
+    if not db_disponivel():
         from core import load_data, save_data
         dados = [d for d in load_data() if d.get("id") != reg_id]
         return save_data(dados)
     try:
-        sb.table("viagens").delete().eq("id", reg_id).execute()
+        r = httpx.delete(
+            f"{_base_url()}/viagens",
+            headers=_headers(),
+            params={"id": f"eq.{reg_id}"},
+            timeout=10,
+        )
+        r.raise_for_status()
         return True
     except Exception as e:
         print(f"[db] Erro ao deletar: {e}")
         return False
 
 def db_migrar_json() -> int:
-    """Migra registros do viagens.json local para o Supabase. Retorna quantidade migrada."""
     from core import load_data
     dados = load_data()
     if not dados:
         return 0
-    sb = _client()
-    if sb is None:
+    if not db_disponivel():
         return 0
     try:
-        sb.table("viagens").upsert(dados).execute()
+        hdrs = {**_headers(), "Prefer": "resolution=merge-duplicates,return=minimal"}
+        r = httpx.post(
+            f"{_base_url()}/viagens",
+            headers=hdrs,
+            content=json.dumps(dados),
+            timeout=30,
+        )
+        r.raise_for_status()
         return len(dados)
     except Exception as e:
         print(f"[db] Erro na migração: {e}")
         return 0
 
-def db_disponivel() -> bool:
-    return _client() is not None
+def db_testar() -> tuple[bool, str]:
+    """Testa a conexão e retorna (ok, mensagem)."""
+    if not _HTTPX:
+        return False, "httpx não instalado (pip install httpx)"
+    url, key = _get_creds()
+    if not url or not key:
+        return False, "SUPABASE_URL ou SUPABASE_KEY não configurados"
+    try:
+        r = httpx.get(
+            f"{url}{REST_SUFFIX}/viagens",
+            headers=_headers(),
+            params={"limit": "1"},
+            timeout=8,
+        )
+        if r.status_code == 200:
+            return True, f"Conectado — {len(r.json())} registro(s) encontrado(s)"
+        return False, f"HTTP {r.status_code}: {r.text[:200]}"
+    except Exception as e:
+        return False, str(e)
