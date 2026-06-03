@@ -129,8 +129,9 @@ if pagina == "📋 Novo Registro":
 
     # ── Seção B: Hospedagem ───────────────────────────────────────────────────
     with st.expander("B  Hospedagem"):
-        hotel_op = st.radio("", ["Sem hospedagem","Opção 1","Opção 2","Opção 3"],
-                            horizontal=True, key="r_hotel_op")
+        hotel_op = st.radio("Selecione", ["Sem hospedagem","Opção 1","Opção 2","Opção 3"],
+                            horizontal=True, key="r_hotel_op",
+                            label_visibility="collapsed")
         hotel_data = {}
         if hotel_op != "Sem hospedagem":
             c1, c2, c3 = st.columns([2,3,1])
