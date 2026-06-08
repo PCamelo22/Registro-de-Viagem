@@ -17,7 +17,7 @@ from core import (
     hash_senha, verificar_senha, cifrar, decifrar, fmt_brl,
     TIPOS_PASSAGEM, TIPOS_TRANSPORTE,
 )
-from db import db_load, db_save, db_delete, db_migrar_json, db_disponivel
+from db import db_load, db_save, db_delete, db_migrar_json, db_disponivel, db_load_cfg, db_save_cfg
 
 # ── Configuração da página ────────────────────────────────────────────────────
 st.set_page_config(
@@ -101,6 +101,22 @@ def _show_splash():
     st.rerun()
 
 # ── Inicialização do estado ───────────────────────────────────────────────────
+def _carregar_cfg() -> dict:
+    """Carrega config: Supabase tem prioridade sobre JSON local."""
+    local = load_cfg()
+    if db_disponivel():
+        db_cfg = db_load_cfg()
+        if db_cfg:
+            local.update(db_cfg)
+    return local
+
+def _salvar_cfg(cfg: dict):
+    """Salva config localmente e no Supabase se disponível."""
+    from core import save_cfg
+    save_cfg(cfg)           # JSON local (pode falhar em cloud, ok)
+    db_save_cfg(cfg)        # Supabase (persistência real em cloud)
+    st.session_state["cfg"] = cfg
+
 def _init_state():
     defaults = {
         "passagens":    [],
@@ -108,7 +124,7 @@ def _init_state():
         "materiais":    [],
         "cfg_senha":    "",
         "cfg_unlocked": False,
-        "cfg":          load_cfg(),
+        "cfg":          _carregar_cfg(),
         "dark_mode":    False,
         "splash_shown": False,
     }
@@ -402,6 +418,26 @@ if pagina == "📋 Novo Registro":
             st.download_button("📋 Baixar canhoto (.txt)", canhoto,
                                file_name=f"canhoto_{nome.replace(' ','_')}.txt")
 
+            # ── Envio automático de e-mail ────────────────────────────────────
+            if cfg.get("auto_email") and cfg.get("email_remetente") and cfg.get("email_destinatario"):
+                try:
+                    _salt = cfg.get("cfg_salt","")
+                    _pwd_plain = st.session_state.get("cfg_senha","")
+                    email_pwd = (
+                        decifrar(cfg.get("email_senha",""), _pwd_plain, _salt)
+                        if _salt and cfg.get("email_senha") else
+                        cfg.get("email_senha","")
+                    )
+                    assunto = f"Canhoto de Viagem — {nome} → {destino}"
+                    with st.spinner("Enviando e-mail..."):
+                        ok_mail, msg_mail = enviar_email(cfg, assunto, canhoto, email_pwd)
+                    if ok_mail:
+                        st.success(f"📧 {msg_mail}")
+                    else:
+                        st.warning(f"⚠️ E-mail não enviado: {msg_mail}")
+                except Exception as ex:
+                    st.warning(f"⚠️ Erro ao enviar e-mail: {ex}")
+
 # =============================================================================
 # PÁGINA: HISTÓRICO
 # =============================================================================
@@ -667,9 +703,8 @@ elif pagina == "⚙ Configurações":
             if st.button("💾 Salvar configurações gerais", type="primary"):
                 cfg["valor_diaria"]      = nova_diaria
                 cfg["backup_automatico"] = bkp_auto
-                save_cfg(cfg)
-                st.session_state["cfg"] = cfg
-                st.success("Salvo!")
+                _salvar_cfg(cfg)
+                st.success("✅ Salvo com sucesso!")
 
         with tab2:
             salt = cfg.get("cfg_salt","")
@@ -691,10 +726,15 @@ elif pagina == "⚙ Configurações":
                 cfg["email_smtp"]         = smtp
                 cfg["email_porta"]        = int(port)
                 cfg["auto_email"]         = ae
-                cfg["email_senha"] = cifrar(pwd, st.session_state.get("cfg_senha",""), salt) if salt else pwd
-                save_cfg(cfg)
-                st.session_state["cfg"] = cfg
-                st.success("Salvo!")
+                cfg["email_senha"] = (
+                    cifrar(pwd, st.session_state.get("cfg_senha",""), salt)
+                    if salt and pwd else pwd
+                )
+                _salvar_cfg(cfg)
+                if db_disponivel():
+                    st.success("✅ E-mail salvo com sucesso no Supabase!")
+                else:
+                    st.warning("⚠️ Salvo localmente. Para persistir no cloud, configure os Secrets do Streamlit.")
             if c2.button("📧 Enviar e-mail de teste"):
                 ok, msg = enviar_email(cfg, "[TESTE] MF Viagens",
                                        "Configuração funcionando!", pwd)
@@ -702,24 +742,51 @@ elif pagina == "⚙ Configurações":
 
         with tab3:
             from core import DATA_FILE, CONFIG_FILE, BACKUP_DIR
+            from db import db_testar
 
-            # Status do banco
+            # ── Status do banco ───────────────────────────────────────────────
             st.markdown("**Banco de dados (Supabase):**")
             if db_disponivel():
-                st.success("✅ Supabase conectado")
-                if st.button("📤 Migrar viagens.json → Supabase", type="primary"):
-                    n = db_migrar_json()
-                    if n:
-                        st.success(f"{n} registro(s) migrado(s) com sucesso!")
+                col_sb1, col_sb2 = st.columns([3, 1])
+                with col_sb1:
+                    if st.button("🔌 Testar conexão Supabase"):
+                        with st.spinner("Testando..."):
+                            ok_sb, msg_sb = db_testar()
+                        if ok_sb:
+                            st.success(f"✅ {msg_sb}")
+                        else:
+                            st.error(f"❌ {msg_sb}")
                     else:
-                        st.warning("Nenhum dado local encontrado ou erro na migração.")
+                        st.success("✅ Supabase configurado")
+                with col_sb2:
+                    if st.button("📤 Migrar JSON → Supabase", type="primary"):
+                        n = db_migrar_json()
+                        if n:
+                            st.success(f"{n} registro(s) migrado(s)!")
+                        else:
+                            st.warning("Nenhum dado local ou erro na migração.")
             else:
                 st.warning("⚠️ Supabase não configurado — usando JSON local")
-                st.caption("Adicione SUPABASE_URL e SUPABASE_KEY nos Secrets do Streamlit.")
+                with st.expander("Como configurar o Supabase no Streamlit Cloud"):
+                    st.markdown("""
+1. Acesse **share.streamlit.io** → seu app → **Settings → Secrets**
+2. Cole o conteúdo abaixo substituindo pelos seus valores:
+```toml
+SUPABASE_URL = "https://SEU-PROJETO.supabase.co"
+SUPABASE_KEY = "sb_secret_SUA_CHAVE_SECRETA"
+
+[email]
+remetente    = "seuemail@gmail.com"
+senha        = "SuaSenhaDeApp"
+destinatario = "destino@empresa.com.br"
+```
+3. Clique **Save** e reinicie o app.
+                    """)
 
             st.markdown("---")
             st.markdown("**Arquivos locais:**")
             st.code(f"Dados    : {DATA_FILE}\nConfig   : {CONFIG_FILE}\nBackups  : {BACKUP_DIR}")
+
             st.markdown("**Dependências:**")
             try:
                 import openpyxl; st.success("openpyxl ✅")
@@ -728,8 +795,15 @@ elif pagina == "⚙ Configurações":
                 import cryptography; st.success("cryptography ✅")
             except: st.warning("cryptography ❌  (pip install cryptography)")
             try:
-                import supabase; st.success("supabase ✅")
-            except: st.warning("supabase ❌  (pip install supabase)")
+                import httpx; st.success(f"httpx ✅  (REST Supabase direto — v{httpx.__version__})")
+            except: st.error("httpx ❌  (pip install httpx)")
+
+            # ── Recarregar cfg do banco ───────────────────────────────────────
+            st.markdown("---")
+            if st.button("🔄 Recarregar configurações do Supabase"):
+                novo_cfg = _carregar_cfg()
+                st.session_state["cfg"] = novo_cfg
+                st.success("Configurações recarregadas!")
 
 
 

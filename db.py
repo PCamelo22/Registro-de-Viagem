@@ -5,6 +5,7 @@ Compatível com o novo formato de chaves sb_publishable_ / sb_secret_.
 Fallback automático para JSON local se não configurado.
 """
 import os, json
+from datetime import datetime as _dt
 
 try:
     import httpx
@@ -53,7 +54,7 @@ def db_load() -> list:
         r = httpx.get(
             f"{_base_url()}/viagens",
             headers=_headers(),
-            params={"order": "data_registro.desc"},
+            params={"order": "data_registro.desc", "id": "neq.__cfg__"},
             timeout=10,
         )
         r.raise_for_status()
@@ -126,6 +127,49 @@ def db_migrar_json() -> int:
     except Exception as e:
         print(f"[db] Erro na migração: {e}")
         return 0
+
+def db_load_cfg() -> dict | None:
+    """Carrega configurações do Supabase (registro especial __cfg__)."""
+    if not db_disponivel():
+        return None
+    try:
+        r = httpx.get(
+            f"{_base_url()}/viagens",
+            headers=_headers(),
+            params={"id": "eq.__cfg__"},
+            timeout=8,
+        )
+        r.raise_for_status()
+        rows = r.json()
+        if rows and rows[0].get("obs"):
+            return json.loads(rows[0]["obs"])
+        return None
+    except Exception as e:
+        print(f"[db] Erro ao carregar cfg: {e}")
+        return None
+
+def db_save_cfg(cfg: dict) -> bool:
+    """Salva configurações no Supabase (registro especial __cfg__)."""
+    if not db_disponivel():
+        return False
+    try:
+        rec = {
+            "id":            "__cfg__",
+            "obs":           json.dumps(cfg, ensure_ascii=False),
+            "data_registro": _dt.now().strftime("%d/%m/%Y %H:%M"),
+        }
+        hdrs = {**_headers(), "Prefer": "resolution=merge-duplicates,return=minimal"}
+        r = httpx.post(
+            f"{_base_url()}/viagens",
+            headers=hdrs,
+            content=json.dumps(rec),
+            timeout=10,
+        )
+        r.raise_for_status()
+        return True
+    except Exception as e:
+        print(f"[db] Erro ao salvar cfg: {e}")
+        return False
 
 def db_testar() -> tuple[bool, str]:
     """Testa a conexão e retorna (ok, mensagem)."""
