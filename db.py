@@ -4,6 +4,7 @@ db.py — Acesso ao Supabase via REST API (httpx).
 Compatível com o novo formato de chaves sb_publishable_ / sb_secret_.
 Fallback automático para JSON local se não configurado.
 """
+from __future__ import annotations
 import os, json
 from datetime import datetime as _dt
 

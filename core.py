@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """core.py — Lógica de negócio compartilhada entre Tkinter e Streamlit."""
+from __future__ import annotations
 import json, os, re, shutil, uuid, hashlib, html, smtplib
 from datetime import datetime
 from pathlib import Path
