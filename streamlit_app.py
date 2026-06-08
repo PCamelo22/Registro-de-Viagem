@@ -181,15 +181,33 @@ st.markdown(f"""
     .stMultiSelect > div > div {{
         background-color: {INPUT_BG} !important;
         color: {TEXT} !important;
-        border-color: {BORDER_C} !important;
+        border: 1.5px solid #4A7A9B !important;
+        border-radius: 6px !important;
+        outline: none !important;
+    }}
+    .stTextInput > div > div > input:focus,
+    .stTextArea > div > div > textarea:focus,
+    .stNumberInput > div > div > input:focus {{
+        border: 1.5px solid #7AAECB !important;
+        box-shadow: 0 0 0 2px rgba(74,122,155,0.35) !important;
     }}
 
     /* ── Date e Time input ── */
-    input[type="date"], input[type="time"],
-    .stDateInput input, .stTimeInput input {{
+    .stDateInput > div,
+    .stDateInput > div > div,
+    .stDateInput input,
+    .stTimeInput > div,
+    .stTimeInput > div > div,
+    .stTimeInput input {{
         background-color: {INPUT_BG} !important;
         color: {TEXT} !important;
-        border-color: {BORDER_C} !important;
+        border: 1.5px solid #4A7A9B !important;
+        border-radius: 6px !important;
+    }}
+    .stDateInput input:focus,
+    .stTimeInput input:focus {{
+        border: 1.5px solid #7AAECB !important;
+        box-shadow: 0 0 0 2px rgba(74,122,155,0.35) !important;
     }}
 
     /* ── Expanders ── */
