@@ -125,7 +125,7 @@ def _init_state():
         "cfg_senha":    "",
         "cfg_unlocked": False,
         "cfg":          _carregar_cfg(),
-        "dark_mode":    False,
+        "dark_mode":    True,
         "splash_shown": False,
         "confirm_clear": False,
     }
@@ -138,43 +138,148 @@ _init_state()
 # Mostra splash apenas na primeira abertura da sessão
 if not st.session_state["splash_shown"]:
     _show_splash()
-cfg       = st.session_state["cfg"]
-dark      = st.session_state["dark_mode"]
-BG        = "#1E293B" if dark else "#F0F4F8"
-SURFACE   = "#0F172A" if dark else "#FFFFFF"
-TEXT      = "#F1F5F9" if dark else "#1A2530"
-TEXT_DIM  = "#94A3B8" if dark else "#5A6978"
-CHART_BG  = "#1E293B" if dark else "#F0F4F8"
-CHART_TPL = "plotly_dark" if dark else "plotly_white"
+cfg        = st.session_state["cfg"]
+dark       = st.session_state["dark_mode"]
+BG         = "#1E293B" if dark else "#F0F4F8"
+SURFACE    = "#0F172A" if dark else "#FFFFFF"
+TEXT       = "#F1F5F9" if dark else "#1A2530"
+TEXT_DIM   = "#94A3B8" if dark else "#5A6978"
+CHART_BG   = "#1E293B" if dark else "#F0F4F8"
+CHART_TPL  = "plotly_dark" if dark else "plotly_white"
+CHART_FONT = "#F1F5F9" if dark else "#1A2530"
+CHART_GRID = "#334155" if dark else "#DDE4EA"
+SIDEBAR_BG = "#0F172A" if dark else "#FFFFFF"
+INPUT_BG   = "#0F172A" if dark else "#FFFFFF"
+BORDER_C   = "#334155" if dark else "#D1D9E0"
 
 backup_auto(cfg)
 
 # ── CSS dinâmico (dark / light) ───────────────────────────────────────────────
 st.markdown(f"""
 <style>
-    .stApp {{
+    /* ── Fundo geral ── */
+    .stApp, .main {{
         background-color: {BG} !important;
     }}
-    section[data-testid="stSidebar"] {{
-        background-color: {"#0F172A" if dark else "#FFFFFF"} !important;
+    section[data-testid="stSidebar"],
+    section[data-testid="stSidebar"] > div {{
+        background-color: {SIDEBAR_BG} !important;
     }}
-    .stApp, .stApp p, .stApp label, .stApp span, .stApp div {{
+
+    /* ── Textos globais ── */
+    .stApp, .stApp p, .stApp label, .stApp span,
+    .stApp div, .stApp h1, .stApp h2, .stApp h3,
+    .stApp li, .stApp a, .stMarkdown {{
         color: {TEXT} !important;
     }}
+
+    /* ── Inputs, selects, textareas ── */
+    .stTextInput > div > div > input,
+    .stTextArea > div > div > textarea,
+    .stNumberInput > div > div > input,
+    .stSelectbox > div > div,
+    .stMultiSelect > div > div {{
+        background-color: {INPUT_BG} !important;
+        color: {TEXT} !important;
+        border-color: {BORDER_C} !important;
+    }}
+
+    /* ── Date e Time input ── */
+    input[type="date"], input[type="time"],
+    .stDateInput input, .stTimeInput input {{
+        background-color: {INPUT_BG} !important;
+        color: {TEXT} !important;
+        border-color: {BORDER_C} !important;
+    }}
+
+    /* ── Expanders ── */
+    details, details > summary,
+    [data-testid="stExpander"] {{
+        background-color: {SURFACE} !important;
+        border-color: {BORDER_C} !important;
+    }}
+    [data-testid="stExpander"] summary p {{
+        color: {TEXT} !important;
+    }}
+
+    /* ── Tabs ── */
+    .stTabs [data-baseweb="tab-list"] {{
+        background-color: {SURFACE} !important;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        color: {TEXT_DIM} !important;
+    }}
+    .stTabs [aria-selected="true"] {{
+        color: {TEXT} !important;
+        border-bottom-color: {BRAND} !important;
+    }}
+
+    /* ── Métricas ── */
+    [data-testid="metric-container"] {{
+        background-color: {SURFACE} !important;
+        border-radius: 8px;
+        padding: 8px 12px;
+        border: 1px solid {BORDER_C};
+    }}
+    [data-testid="metric-container"] label,
+    [data-testid="metric-container"] div {{
+        color: {TEXT} !important;
+    }}
+
+    /* ── Dataframe / tabela ── */
+    .stDataFrame, iframe {{
+        background-color: {SURFACE} !important;
+    }}
+
+    /* ── Formulários ── */
+    [data-testid="stForm"] {{
+        background-color: {SURFACE} !important;
+        border: 1px solid {BORDER_C} !important;
+        border-radius: 8px;
+        padding: 12px;
+    }}
+
+    /* ── Botões ── */
+    .stButton > button {{
+        border-color: {BORDER_C} !important;
+        color: {TEXT} !important;
+        background-color: {SURFACE} !important;
+    }}
+    .stButton > button[kind="primary"] {{
+        background-color: {BRAND} !important;
+        color: white !important;
+        border-color: {BRAND} !important;
+    }}
+
+    /* ── Info / Warning / Success ── */
+    [data-testid="stAlert"] {{
+        background-color: {SURFACE} !important;
+        border-color: {BORDER_C} !important;
+    }}
+
+    /* ── Scrollbar ── */
+    ::-webkit-scrollbar {{ width: 6px; height: 6px; }}
+    ::-webkit-scrollbar-track {{ background: {BG}; }}
+    ::-webkit-scrollbar-thumb {{ background: #4A7A9B; border-radius: 4px; }}
+
+    /* ── Header principal ── */
     .main-header {{
-        background: {BRAND};
+        background: linear-gradient(90deg, #1A3A5A 0%, {BRAND} 50%, #1A3A5A 100%);
         color: white;
         padding: 16px 24px;
         border-radius: 8px;
         margin-bottom: 20px;
         text-align: center;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.4);
     }}
+
+    /* ── Cards do painel ── */
     .painel-card {{
         border-radius: 12px;
         padding: 18px 16px 14px 16px;
         color: white;
         margin-bottom: 8px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.35);
     }}
     .painel-card .label {{
         font-size: 12px; opacity: 0.85;
@@ -183,6 +288,7 @@ st.markdown(f"""
     .painel-card .valor {{
         font-size: 22px; font-weight: 700;
     }}
+
     div[data-testid="stSidebarNav"] {{ display: none; }}
 </style>
 """, unsafe_allow_html=True)
@@ -597,11 +703,11 @@ elif pagina == "📊 Painel":
                 template=CHART_TPL,
                 height=360,
                 margin=dict(t=40, b=20, l=20, r=20),
-                title_font=dict(size=14, color="#1A2530"),
-                font=dict(color="#1A2530"),
+                title_font=dict(size=14, color=CHART_FONT),
+                font=dict(color=CHART_FONT),
             )
             fig.update_traces(textposition="outside", marker_line_width=0)
-            fig.update_yaxes(showgrid=True, gridcolor="#DDE4EA")
+            fig.update_yaxes(showgrid=True, gridcolor=CHART_GRID)
             fig.update_xaxes(showgrid=False)
             st.plotly_chart(fig, use_container_width=True)
 
@@ -619,9 +725,9 @@ elif pagina == "📊 Painel":
                 paper_bgcolor=CHART_BG,
                 height=360,
                 margin=dict(t=40, b=20, l=20, r=20),
-                title_font=dict(size=14, color="#1A2530"),
-                font=dict(color="#1A2530"),
-                legend=dict(bgcolor=CHART_BG),
+                title_font=dict(size=14, color=CHART_FONT),
+                font=dict(color=CHART_FONT),
+                legend=dict(bgcolor=CHART_BG, font=dict(color=CHART_FONT)),
             )
             fig2.update_traces(textposition="inside", textinfo="percent+label")
             st.plotly_chart(fig2, use_container_width=True)
@@ -651,13 +757,13 @@ elif pagina == "📊 Painel":
                 template=CHART_TPL,
             height=340,
             margin=dict(t=40, b=60, l=20, r=20),
-            title_font=dict(size=14, color="#1A2530"),
-            font=dict(color="#1A2530"),
+            title_font=dict(size=14, color=CHART_FONT),
+            font=dict(color=CHART_FONT),
             coloraxis_showscale=False,
             xaxis_tickangle=-30,
         )
         fig3.update_traces(textposition="outside", marker_line_width=0)
-        fig3.update_yaxes(showgrid=True, gridcolor="#DDE4EA")
+        fig3.update_yaxes(showgrid=True, gridcolor=CHART_GRID)
         fig3.update_xaxes(showgrid=False)
         st.plotly_chart(fig3, use_container_width=True)
 
