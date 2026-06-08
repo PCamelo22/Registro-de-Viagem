@@ -172,6 +172,38 @@ def db_save_cfg(cfg: dict) -> bool:
         print(f"[db] Erro ao salvar cfg: {e}")
         return False
 
+def db_clear() -> int:
+    """Apaga todos os registros de viagens (exceto __cfg__). Retorna qtd apagada."""
+    if not db_disponivel():
+        try:
+            from core import save_data
+            save_data([])
+            return 0
+        except Exception:
+            return -1
+    try:
+        # Conta antes
+        r = httpx.get(
+            f"{_base_url()}/viagens",
+            headers=_headers(),
+            params={"id": "neq.__cfg__", "select": "id"},
+            timeout=10,
+        )
+        r.raise_for_status()
+        count = len(r.json())
+        # Deleta todos exceto __cfg__
+        r2 = httpx.delete(
+            f"{_base_url()}/viagens",
+            headers={**_headers(), "Prefer": "return=minimal"},
+            params={"id": "neq.__cfg__"},
+            timeout=20,
+        )
+        r2.raise_for_status()
+        return count
+    except Exception as e:
+        print(f"[db] Erro ao limpar banco: {e}")
+        return -1
+
 def db_testar() -> tuple[bool, str]:
     """Testa a conexão e retorna (ok, mensagem)."""
     if not _HTTPX:

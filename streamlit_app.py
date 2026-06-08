@@ -7,7 +7,7 @@ import json, uuid, base64, time
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime
+from datetime import datetime, date as _date, time as _time
 from pathlib import Path
 
 from core import (
@@ -17,7 +17,7 @@ from core import (
     hash_senha, verificar_senha, cifrar, decifrar, fmt_brl,
     TIPOS_PASSAGEM, TIPOS_TRANSPORTE,
 )
-from db import db_load, db_save, db_delete, db_migrar_json, db_disponivel, db_load_cfg, db_save_cfg
+from db import db_load, db_save, db_delete, db_migrar_json, db_disponivel, db_load_cfg, db_save_cfg, db_clear
 
 # ── Configuração da página ────────────────────────────────────────────────────
 st.set_page_config(
@@ -127,6 +127,7 @@ def _init_state():
         "cfg":          _carregar_cfg(),
         "dark_mode":    False,
         "splash_shown": False,
+        "confirm_clear": False,
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -231,11 +232,19 @@ if pagina == "📋 Novo Registro":
         c1, c2 = st.columns(2)
         nome    = c1.text_input("Nome do Viajante *", key="r_nome")
         destino = c2.text_input("Destino *", key="r_dest")
-        c1, c2, c3, c4 = st.columns([2,1,2,1])
-        ida     = c1.text_input("Partida (DD/MM/AAAA) *", key="r_ida")
-        h_ida   = c2.text_input("Hora", "HH:MM", key="r_h_ida")
-        volta   = c3.text_input("Retorno (DD/MM/AAAA) *", key="r_volta")
-        h_vta   = c4.text_input("Hora", "HH:MM", key="r_h_vta")
+
+        c1, c2, c3, c4 = st.columns([2, 1, 2, 1])
+        _d_ida  = c1.date_input("📅 Partida *", value=None, key="r_ida",
+                                 format="DD/MM/YYYY", min_value=_date(2000,1,1))
+        _t_ida  = c2.time_input("🕐 Hora", value=_time(8, 0), key="r_h_ida", step=300)
+        _d_vta  = c3.date_input("📅 Retorno *", value=None, key="r_volta",
+                                 format="DD/MM/YYYY", min_value=_date(2000,1,1))
+        _t_vta  = c4.time_input("🕐 Hora", value=_time(18, 0), key="r_h_vta", step=300)
+
+        ida   = _d_ida.strftime("%d/%m/%Y") if _d_ida else ""
+        h_ida = _t_ida.strftime("%H:%M")    if _t_ida else ""
+        volta = _d_vta.strftime("%d/%m/%Y") if _d_vta else ""
+        h_vta = _t_vta.strftime("%H:%M")    if _t_vta else ""
 
         d = days(ida, volta)
         vd = cfg.get("valor_diaria", 150.0)
@@ -270,21 +279,27 @@ if pagina == "📋 Novo Registro":
 
             st.markdown("**✈ Ida**")
             c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-            dt = c1.text_input("Data DD/MM/AAAA", key="pdt")
-            hr = c2.text_input("Hora HH:MM", key="phr")
-            vl = c3.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl")
-            lc = c4.text_input("Localizador", key="plc")
+            _pdt  = c1.date_input("📅 Data", value=None, key="pdt",
+                                   format="DD/MM/YYYY", min_value=_date(2000,1,1))
+            _phr  = c2.time_input("🕐 Hora", value=_time(8,0), key="phr", step=300)
+            vl    = c3.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl")
+            lc    = c4.text_input("Localizador", key="plc")
+            dt    = _pdt.strftime("%d/%m/%Y") if _pdt else ""
+            hr    = _phr.strftime("%H:%M")    if _phr else ""
 
             tr_v = dt_v = hr_v = lc_v = ""
             vl_v = 0.0
             if ida_vta:
                 st.markdown("**↩ Volta**")
                 c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-                tr_v = c1.text_input("Trecho volta (ex: GRU > BSB)", key="ptrecho_v")
-                dt_v = c2.text_input("Data DD/MM/AAAA", key="pdt_v")
-                hr_v = c3.text_input("Hora HH:MM", key="phr_v")
-                vl_v = c4.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl_v")
-                lc_v = st.text_input("Localizador volta", key="plc_v")
+                tr_v   = c1.text_input("Trecho volta (ex: GRU > BSB)", key="ptrecho_v")
+                _pdt_v = c2.date_input("📅 Data", value=None, key="pdt_v",
+                                        format="DD/MM/YYYY", min_value=_date(2000,1,1))
+                _phr_v = c3.time_input("🕐 Hora", value=_time(18,0), key="phr_v", step=300)
+                vl_v   = c4.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl_v")
+                lc_v   = st.text_input("Localizador volta", key="plc_v")
+                dt_v   = _pdt_v.strftime("%d/%m/%Y") if _pdt_v else ""
+                hr_v   = _phr_v.strftime("%H:%M")    if _phr_v else ""
 
             if st.form_submit_button("➕ Adicionar Passagem"):
                 if tr and dt:
@@ -317,10 +332,12 @@ if pagina == "📋 Novo Registro":
     with st.expander(f"D  Transporte Local  ({len(st.session_state['transportes'])} adicionados)"):
         with st.form("form_transp", clear_on_submit=True):
             c1,c2,c3,c4 = st.columns([1,1,3,1])
-            tdt = c1.text_input("Data DD/MM/AAAA", key="tdt")
-            ttp = c2.selectbox("Tipo", TIPOS_TRANSPORTE, key="ttp")
-            tdc = c3.text_input("Descrição", key="tdc")
-            tvl = c4.number_input("Valor R$", min_value=0.0, step=1.0, key="tvl")
+            _tdt = c1.date_input("📅 Data", value=None, key="tdt",
+                                  format="DD/MM/YYYY", min_value=_date(2000,1,1))
+            ttp  = c2.selectbox("Tipo", TIPOS_TRANSPORTE, key="ttp")
+            tdc  = c3.text_input("Descrição", key="tdc")
+            tvl  = c4.number_input("Valor R$", min_value=0.0, step=1.0, key="tvl")
+            tdt  = _tdt.strftime("%d/%m/%Y") if _tdt else ""
             if st.form_submit_button("➕ Adicionar Transporte"):
                 st.session_state["transportes"].append({
                     "data":tdt,"tipo":ttp,"descricao":tdc,"valor":tvl,"anexo":""
@@ -391,12 +408,12 @@ if pagina == "📋 Novo Registro":
 
     if gerar:
         erros = []
-        if not nome:    erros.append("Nome do viajante")
-        if not destino: erros.append("Destino")
-        if not ida:     erros.append("Data de partida")
-        if not volta:   erros.append("Data de retorno")
-        if not pix:     erros.append("Chave PIX")
-        if not days(ida, volta): erros.append("Datas inválidas")
+        if not nome:           erros.append("Nome do viajante")
+        if not destino:        erros.append("Destino")
+        if not _d_ida:         erros.append("Data de partida")
+        if not _d_vta:         erros.append("Data de retorno")
+        if not pix:            erros.append("Chave PIX")
+        if ida and volta and not days(ida, volta): erros.append("Data de retorno anterior à partida")
         if erros:
             st.error(f"Preencha: {', '.join(erros)}")
         else:
@@ -804,6 +821,54 @@ destinatario = "destino@empresa.com.br"
                 novo_cfg = _carregar_cfg()
                 st.session_state["cfg"] = novo_cfg
                 st.success("Configurações recarregadas!")
+
+            # ── Limpar banco de dados ─────────────────────────────────────────
+            st.markdown("---")
+            st.markdown("**⚠️ Zona de perigo:**")
+            if not st.session_state["confirm_clear"]:
+                if st.button("🗑️ Limpar banco de dados", type="secondary"):
+                    st.session_state["confirm_clear"] = True
+                    st.rerun()
+            else:
+                st.error(
+                    "**ATENÇÃO:** Esta ação apagará **TODOS** os registros de viagens permanentemente. "
+                    "Para confirmar, digite sua senha de Administrador abaixo."
+                )
+                with st.form("form_clear_db"):
+                    _pwd_clear = st.text_input("Senha do Administrador", type="password")
+                    cc1, cc2 = st.columns(2)
+                    confirmar = cc1.form_submit_button("✅ Confirmar exclusão", type="primary")
+                    cancelar  = cc2.form_submit_button("❌ Cancelar")
+
+                if cancelar:
+                    st.session_state["confirm_clear"] = False
+                    st.rerun()
+
+                if confirmar:
+                    _salt_c = cfg.get("cfg_salt","")
+                    _ok_pwd = False
+                    if _salt_c:
+                        _ok_pwd = verificar_senha(
+                            cfg.get("cfg_user","") + _pwd_clear,
+                            cfg["cfg_hash"], _salt_c
+                        )
+                    else:
+                        import hashlib as _hl
+                        _ok_pwd = (
+                            _hl.sha256((cfg.get("cfg_user","") + _pwd_clear)
+                                       .strip().encode()).hexdigest() == cfg.get("cfg_hash","")
+                        )
+                    if not _ok_pwd:
+                        st.error("❌ Senha incorreta. Operação cancelada.")
+                    else:
+                        with st.spinner("Apagando todos os registros..."):
+                            n_apagados = db_clear()
+                        if n_apagados >= 0:
+                            st.session_state["confirm_clear"] = False
+                            st.success(f"✅ Banco limpo! {n_apagados} registro(s) removido(s).")
+                            st.rerun()
+                        else:
+                            st.error("❌ Erro ao limpar o banco. Verifique os logs.")
 
 
 
