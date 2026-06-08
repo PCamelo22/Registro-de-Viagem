@@ -127,7 +127,11 @@ def _init_state():
         "cfg":          _carregar_cfg(),
         "dark_mode":    True,
         "splash_shown": False,
-        "confirm_clear": False,
+        "confirm_clear":   False,
+        "edit_id":         None,
+        "edit_passagens":  [],
+        "edit_transportes":[],
+        "edit_materiais":  [],
     }
     for k, v in defaults.items():
         if k not in st.session_state:
@@ -465,7 +469,7 @@ if pagina == "📋 Novo Registro":
     with st.expander(f"D  Transporte Local  ({len(st.session_state['transportes'])} adicionados)"):
         with st.form("form_transp", clear_on_submit=True):
             c1,c2,c3,c4 = st.columns([1,1,3,1])
-            _tdt = c1.date_input("📅 Data", value=_d_ida if _d_ida else None, key="tdt",
+            _tdt = c1.date_input("📅 Data", value=None, key="tdt",
                                   format="DD/MM/YYYY", min_value=_date(2000,1,1))
             ttp  = c2.selectbox("Tipo", TIPOS_TRANSPORTE, key="ttp")
             tdc  = c3.text_input("Descrição", key="tdc")
@@ -613,24 +617,29 @@ elif pagina == "📜 Histórico":
         total = sum(d.get("val_total", d.get("valor",0)) for d in res)
         st.markdown(f"**{len(res)} registro(s)** — Total: **{fmt_brl(total)}**")
 
-        rows = []
+        # ── Tabela com botões de ação ─────────────────────────────────────────
         for d in res:
-            h  = d.get("hotel",{})
-            hn = h.get("nome","") if isinstance(h,dict) and h.get("selecionado")=="Sim" else "Não"
-            vt = d.get("val_total", d.get("valor",0))
-            rows.append({
-                "Nome":     d.get("nome",""),
-                "Destino":  d.get("destino",""),
-                "Partida":  d.get("ida",""),
-                "Retorno":  d.get("volta",""),
-                "Hotel":    hn,
-                "Dias":     d.get("dias",""),
-                "Passagens":len(d.get("passagens",[])),
-                "Total":    fmt_brl(vt),
-            })
-
-        df = pd.DataFrame(rows)
-        st.dataframe(df, use_container_width=True, hide_index=True)
+            h   = d.get("hotel",{})
+            hn  = h.get("nome","") if isinstance(h,dict) and h.get("selecionado")=="Sim" else "—"
+            vt  = d.get("val_total", d.get("valor",0))
+            rid = d.get("id","")
+            with st.container():
+                c1,c2,c3,c4,c5,c6,c7 = st.columns([3,2,1,1,1,1,1])
+                c1.markdown(f"**{d.get('nome','')}**  \n📍 {d.get('destino','')}")
+                c2.markdown(f"📅 {d.get('ida','')} → {d.get('volta','')}")
+                c3.markdown(f"🏨 {hn}")
+                c4.markdown(f"{d.get('dias',0)}d")
+                c5.markdown(f"**{fmt_brl(vt)}**")
+                if c6.button("✏️", key=f"edit_{rid}", help="Editar viagem"):
+                    st.session_state["edit_id"]          = rid
+                    st.session_state["edit_passagens"]   = list(d.get("passagens",[]))
+                    st.session_state["edit_transportes"] = list(d.get("transportes",[]))
+                    st.session_state["edit_materiais"]   = list(d.get("materiais",[]))
+                    st.rerun()
+                if c7.button("🗑️", key=f"del_{rid}", help="Excluir viagem"):
+                    db_delete(rid)
+                    st.rerun()
+            st.markdown("<hr style='margin:4px 0; border-color:#334155;'>", unsafe_allow_html=True)
 
         xls = exportar_excel_bytes(res)
         if xls:
@@ -638,6 +647,178 @@ elif pagina == "📜 Histórico":
                                data=xls,
                                file_name=f"viagens_{datetime.now().strftime('%Y%m%d')}.xlsx",
                                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+    # ── Formulário de edição ──────────────────────────────────────────────────
+    edit_id = st.session_state.get("edit_id")
+    if edit_id:
+        reg_orig = next((d for d in db_load() if d.get("id") == edit_id), None)
+        if not reg_orig:
+            st.session_state["edit_id"] = None
+        else:
+            st.markdown("---")
+            st.subheader(f"✏️ Editando: {reg_orig.get('nome','')} → {reg_orig.get('destino','')}")
+
+            def _parse_date(s):
+                try:    return datetime.strptime(s, "%d/%m/%Y").date()
+                except: return None
+            def _parse_time(s):
+                try:    return datetime.strptime(s, "%H:%M").time()
+                except: return _time(8,0)
+
+            with st.expander("A  Dados da Viagem", expanded=True):
+                ec1, ec2 = st.columns(2)
+                e_nome    = ec1.text_input("Nome do Viajante *", value=reg_orig.get("nome",""), key="e_nome")
+                e_destino = ec2.text_input("Destino *", value=reg_orig.get("destino",""), key="e_dest")
+                ec1,ec2,ec3,ec4 = st.columns([2,1,2,1])
+                _ed_ida = ec1.date_input("📅 Partida *", value=_parse_date(reg_orig.get("ida","")),
+                                          key="e_ida", format="DD/MM/YYYY", min_value=_date(2000,1,1))
+                _et_ida = ec2.time_input("🕐 Hora", value=_parse_time(reg_orig.get("hora_ida","08:00")),
+                                          key="e_h_ida", step=300)
+                _ed_vta = ec3.date_input("📅 Retorno *", value=_parse_date(reg_orig.get("volta","")),
+                                          key="e_vta", format="DD/MM/YYYY", min_value=_date(2000,1,1))
+                _et_vta = ec4.time_input("🕐 Hora", value=_parse_time(reg_orig.get("hora_volta","18:00")),
+                                          key="e_h_vta", step=300)
+                e_ida   = _ed_ida.strftime("%d/%m/%Y") if _ed_ida else ""
+                e_h_ida = _et_ida.strftime("%H:%M")    if _et_ida else ""
+                e_volta = _ed_vta.strftime("%d/%m/%Y") if _ed_vta else ""
+                e_h_vta = _et_vta.strftime("%H:%M")    if _et_vta else ""
+                d_calc  = days(e_ida, e_volta)
+                if d_calc:
+                    st.info(f"**{d_calc} dia(s)** — Diárias: **{fmt_brl(d_calc * cfg.get('valor_diaria',150))}**")
+
+            with st.expander("B  Hospedagem"):
+                h_orig = reg_orig.get("hotel",{})
+                h_sel  = h_orig.get("selecionado","Nao") if isinstance(h_orig,dict) else "Nao"
+                opts   = ["Sem hospedagem","Opção 1","Opção 2","Opção 3"]
+                idx    = 0 if h_sel != "Sim" else 1
+                e_hotel_op = st.radio("Hotel", opts, index=idx, horizontal=True,
+                                       key="e_hotel_op", label_visibility="collapsed")
+                if e_hotel_op != "Sem hospedagem":
+                    eh1,eh2,eh3 = st.columns([2,3,1])
+                    e_hn  = eh1.text_input("Nome", value=h_orig.get("nome","") if isinstance(h_orig,dict) else "", key="e_hn")
+                    e_hl  = eh2.text_input("Link", value=h_orig.get("link","") if isinstance(h_orig,dict) else "", key="e_hl")
+                    e_hv  = eh3.number_input("R$/noite", value=float(h_orig.get("valor_noite",0) if isinstance(h_orig,dict) else 0),
+                                              min_value=0.0, step=10.0, key="e_hv")
+                    e_hotel = {"selecionado":"Sim","nome":e_hn,"link":e_hl,"valor_noite":e_hv}
+                else:
+                    e_hotel = {"selecionado":"Nao","nome":"","link":"","valor_noite":0.0}
+
+            with st.expander(f"C  Passagens  ({len(st.session_state['edit_passagens'])} adicionadas)"):
+                with st.form("form_edit_pass", clear_on_submit=True):
+                    ep1,ep2 = st.columns([1,3])
+                    ept = ep1.selectbox("Tipo", TIPOS_PASSAGEM, key="ept")
+                    etr = ep2.text_input("Trecho", key="eptrecho")
+                    ep1,ep2,ep3,ep4 = st.columns([2,1,1,1])
+                    _epdt = ep1.date_input("📅 Data", value=_parse_date(reg_orig.get("ida","")),
+                                            key="epdt", format="DD/MM/YYYY", min_value=_date(2000,1,1))
+                    _ephr = ep2.time_input("🕐 Hora", value=_time(8,0), key="ephr", step=300)
+                    epvl  = ep3.number_input("Valor R$", min_value=0.0, step=10.0, key="epvl")
+                    eplc  = ep4.text_input("Localizador", key="eplc")
+                    if st.form_submit_button("➕ Adicionar Passagem"):
+                        if etr and _epdt:
+                            st.session_state["edit_passagens"].append({
+                                "tipo":ept,"trecho":etr,
+                                "data":_epdt.strftime("%d/%m/%Y"),"hora":_ephr.strftime("%H:%M"),
+                                "valor":epvl,"localizador":eplc,"link":"","sentido":"Ida"
+                            })
+                            st.rerun()
+                for i,p in enumerate(st.session_state["edit_passagens"]):
+                    pc1,pc2 = st.columns([9,1])
+                    sentido = p.get("sentido","Ida")
+                    pc1.markdown(f"✈ **[{p['tipo']}]** `{sentido}` {p['trecho']} — {p['data']} {p.get('hora','')} — **{fmt_brl(p['valor'])}**")
+                    if pc2.button("🗑", key=f"edpass{i}"):
+                        st.session_state["edit_passagens"].pop(i); st.rerun()
+
+            with st.expander(f"D  Transporte  ({len(st.session_state['edit_transportes'])} adicionados)"):
+                with st.form("form_edit_transp", clear_on_submit=True):
+                    et1,et2,et3,et4 = st.columns([1,1,3,1])
+                    _etdt = et1.date_input("📅 Data", value=None, key="etdt",
+                                            format="DD/MM/YYYY", min_value=_date(2000,1,1))
+                    ettp  = et2.selectbox("Tipo", TIPOS_TRANSPORTE, key="ettp")
+                    etdc  = et3.text_input("Descrição", key="etdc")
+                    etvl  = et4.number_input("Valor R$", min_value=0.0, step=1.0, key="etvl")
+                    if st.form_submit_button("➕ Adicionar Transporte"):
+                        st.session_state["edit_transportes"].append({
+                            "data":_etdt.strftime("%d/%m/%Y") if _etdt else "",
+                            "tipo":ettp,"descricao":etdc,"valor":etvl,"anexo":""
+                        })
+                        st.rerun()
+                for i,t in enumerate(st.session_state["edit_transportes"]):
+                    tc1,tc2 = st.columns([9,1])
+                    tc1.markdown(f"🚗 {t['data']} **[{t['tipo']}]** {t['descricao']} — **{fmt_brl(t['valor'])}**")
+                    if tc2.button("🗑", key=f"edtransp{i}"):
+                        st.session_state["edit_transportes"].pop(i); st.rerun()
+
+            with st.expander(f"E  Materiais  ({len(st.session_state['edit_materiais'])} adicionados)"):
+                with st.form("form_edit_mat", clear_on_submit=True):
+                    em1,em2,em3 = st.columns([3,1,1])
+                    emdc = em1.text_input("Descrição", key="emdc")
+                    emqt = em2.number_input("Qtd", min_value=1, step=1, key="emqt")
+                    emvl = em3.number_input("Valor unit R$", min_value=0.0, step=1.0, key="emvl")
+                    if st.form_submit_button("➕ Adicionar Material"):
+                        st.session_state["edit_materiais"].append({
+                            "descricao":emdc,"qtd":emqt,"valor_unit":emvl,"total":emqt*emvl,"nf":""
+                        })
+                        st.rerun()
+                for i,m in enumerate(st.session_state["edit_materiais"]):
+                    mc1,mc2 = st.columns([9,1])
+                    mc1.markdown(f"📦 {m['descricao']} x{m['qtd']} — **{fmt_brl(m['total'])}**")
+                    if mc2.button("🗑", key=f"edmat{i}"):
+                        st.session_state["edit_materiais"].pop(i); st.rerun()
+
+            ec1, ec2 = st.columns([1,2])
+            e_pix = ec1.text_input("Chave PIX *", value=reg_orig.get("pix",""), key="e_pix")
+            e_obs = ec2.text_area("Observações", value=reg_orig.get("obs",""), key="e_obs", height=80)
+
+            # Resumo live
+            reg_tmp = {"ida":e_ida,"volta":e_volta,"hotel":e_hotel,
+                       "passagens":st.session_state["edit_passagens"],
+                       "transportes":st.session_state["edit_transportes"],
+                       "materiais":st.session_state["edit_materiais"]}
+            t_ed = calc_totais(reg_tmp, cfg)
+            et1,et2,et3,et4,et5,et6 = st.columns(6)
+            et1.metric("Diárias",    fmt_brl(t_ed["val_d"]))
+            et2.metric("Passagens",  fmt_brl(t_ed["val_p"]))
+            et3.metric("Transporte", fmt_brl(t_ed["val_t"]))
+            et4.metric("Hospedagem", fmt_brl(t_ed["val_h"]))
+            et5.metric("Materiais",  fmt_brl(t_ed["val_m"]))
+            et6.metric("**TOTAL**",  fmt_brl(t_ed["total"]))
+
+            st.markdown("---")
+            bc1, bc2 = st.columns([2,1])
+            salvar_edicao  = bc1.button("💾 Salvar alterações", type="primary", use_container_width=True)
+            cancelar_edicao= bc2.button("❌ Cancelar edição", use_container_width=True)
+
+            if cancelar_edicao:
+                st.session_state["edit_id"] = None
+                st.rerun()
+
+            if salvar_edicao:
+                erros_ed = []
+                if not e_nome:    erros_ed.append("Nome")
+                if not e_destino: erros_ed.append("Destino")
+                if not e_ida:     erros_ed.append("Data de partida")
+                if not e_volta:   erros_ed.append("Data de retorno")
+                if not e_pix:     erros_ed.append("Chave PIX")
+                if erros_ed:
+                    st.error(f"Preencha: {', '.join(erros_ed)}")
+                else:
+                    reg_ed = {
+                        **reg_orig,
+                        "nome":e_nome, "destino":e_destino,
+                        "ida":e_ida, "hora_ida":e_h_ida,
+                        "volta":e_volta, "hora_volta":e_h_vta,
+                        "hotel":e_hotel,
+                        "passagens":  list(st.session_state["edit_passagens"]),
+                        "transportes":list(st.session_state["edit_transportes"]),
+                        "materiais":  list(st.session_state["edit_materiais"]),
+                        "pix":e_pix, "obs":e_obs,
+                    }
+                    reg_ed = salvar_registro(reg_ed, cfg)
+                    db_save(reg_ed)
+                    st.session_state["edit_id"] = None
+                    st.success(f"✅ Viagem atualizada! Total: {fmt_brl(reg_ed['val_total'])}")
+                    st.rerun()
 
 # =============================================================================
 # PÁGINA: PAINEL
