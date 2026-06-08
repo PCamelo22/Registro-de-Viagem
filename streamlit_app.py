@@ -401,11 +401,20 @@ if pagina == "📋 Novo Registro":
             pt = c1.selectbox("Tipo", TIPOS_PASSAGEM, key="pt")
             tr = c2.text_input("Trecho ida (ex: BSB > GRU)", key="ptrecho")
 
+            # Sugestão automática: usa as datas/horas da seção A se já preenchidas
+            _sug_dt_ida = _d_ida if _d_ida else None
+            _sug_hr_ida = _t_ida if _t_ida else _time(8, 0)
+            _sug_dt_vta = _d_vta if _d_vta else None
+            _sug_hr_vta = _t_vta if _t_vta else _time(18, 0)
+
+            if _d_ida or _d_vta:
+                st.caption("💡 Datas sugeridas com base nos dados da viagem — ajuste se necessário.")
+
             st.markdown("**✈ Ida**")
             c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
-            _pdt  = c1.date_input("📅 Data", value=None, key="pdt",
+            _pdt  = c1.date_input("📅 Data", value=_sug_dt_ida, key="pdt",
                                    format="DD/MM/YYYY", min_value=_date(2000,1,1))
-            _phr  = c2.time_input("🕐 Hora", value=_time(8,0), key="phr", step=300)
+            _phr  = c2.time_input("🕐 Hora", value=_sug_hr_ida, key="phr", step=300)
             vl    = c3.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl")
             lc    = c4.text_input("Localizador", key="plc")
             dt    = _pdt.strftime("%d/%m/%Y") if _pdt else ""
@@ -417,9 +426,9 @@ if pagina == "📋 Novo Registro":
                 st.markdown("**↩ Volta**")
                 c1, c2, c3, c4 = st.columns([2, 1, 1, 1])
                 tr_v   = c1.text_input("Trecho volta (ex: GRU > BSB)", key="ptrecho_v")
-                _pdt_v = c2.date_input("📅 Data", value=None, key="pdt_v",
+                _pdt_v = c2.date_input("📅 Data", value=_sug_dt_vta, key="pdt_v",
                                         format="DD/MM/YYYY", min_value=_date(2000,1,1))
-                _phr_v = c3.time_input("🕐 Hora", value=_time(18,0), key="phr_v", step=300)
+                _phr_v = c3.time_input("🕐 Hora", value=_sug_hr_vta, key="phr_v", step=300)
                 vl_v   = c4.number_input("Valor R$", min_value=0.0, step=10.0, key="pvl_v")
                 lc_v   = st.text_input("Localizador volta", key="plc_v")
                 dt_v   = _pdt_v.strftime("%d/%m/%Y") if _pdt_v else ""
@@ -456,7 +465,7 @@ if pagina == "📋 Novo Registro":
     with st.expander(f"D  Transporte Local  ({len(st.session_state['transportes'])} adicionados)"):
         with st.form("form_transp", clear_on_submit=True):
             c1,c2,c3,c4 = st.columns([1,1,3,1])
-            _tdt = c1.date_input("📅 Data", value=None, key="tdt",
+            _tdt = c1.date_input("📅 Data", value=_d_ida if _d_ida else None, key="tdt",
                                   format="DD/MM/YYYY", min_value=_date(2000,1,1))
             ttp  = c2.selectbox("Tipo", TIPOS_TRANSPORTE, key="ttp")
             tdc  = c3.text_input("Descrição", key="tdc")
