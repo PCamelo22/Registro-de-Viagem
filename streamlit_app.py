@@ -17,7 +17,7 @@ from core import (
     hash_senha, verificar_senha, cifrar, decifrar, fmt_brl,
     TIPOS_PASSAGEM, TIPOS_TRANSPORTE,
 )
-from db import db_load, db_save, db_delete, db_migrar_json, db_disponivel, db_load_cfg, db_save_cfg, db_clear
+from db import db_load, db_save, db_delete, db_migrar_json, db_disponivel, db_load_cfg, db_save_cfg, db_clear, db_diagnostico
 
 # ── Configuração da página ────────────────────────────────────────────────────
 st.set_page_config(
@@ -1098,6 +1098,21 @@ elif pagina == "⚙ Configurações":
                             st.warning("Nenhum dado local ou erro na migração.")
             else:
                 st.warning("⚠️ Supabase não configurado — usando JSON local")
+                with st.expander("🔍 Diagnóstico de conexão", expanded=True):
+                    diag = db_diagnostico()
+                    st.markdown(f"**httpx instalado:** {'✅' if diag.get('httpx') else '❌'}")
+                    st.markdown(f"**Var. ambiente SUPABASE_URL:** {diag.get('env_url','❌')}")
+                    st.markdown(f"**Var. ambiente SUPABASE_KEY:** {diag.get('env_key','❌')}")
+                    sk = diag.get("secrets_keys", [])
+                    st.markdown(f"**Chaves nos Secrets:** `{sk}`")
+                    if diag.get("url"):
+                        st.markdown(f"**URL lida:** `{diag['url']}`")
+                    if diag.get("key_prefix"):
+                        st.markdown(f"**Key lida (início):** `{diag['key_prefix']}`")
+                    if diag.get("erro"):
+                        st.error(f"Erro ao ler secrets: {diag['erro']}")
+                    if sk and "SUPABASE_URL" not in sk and "SUPABASE_KEY" not in sk:
+                        st.error("❌ As chaves **SUPABASE_URL** e **SUPABASE_KEY** não foram encontradas nos Secrets. Verifique os nomes exatos.")
                 with st.expander("Como configurar o Supabase no Streamlit Cloud"):
                     st.markdown("""
 1. Acesse **share.streamlit.io** → seu app → **Settings → Secrets**

@@ -26,11 +26,30 @@ def _get_creds():
     if not url or not key:
         try:
             import streamlit as st
-            url = st.secrets.get("SUPABASE_URL", "")
-            key = st.secrets.get("SUPABASE_KEY", "")
+            # Tenta acesso direto por chave (mais robusto que .get())
+            try:    url = st.secrets["SUPABASE_URL"]
+            except: url = st.secrets.get("SUPABASE_URL", "")
+            try:    key = st.secrets["SUPABASE_KEY"]
+            except: key = st.secrets.get("SUPABASE_KEY", "")
         except Exception:
             pass
     return url.strip().rstrip("/"), key.strip()
+
+def db_diagnostico() -> dict:
+    """Retorna diagnóstico detalhado da configuração."""
+    diag = {"httpx": _HTTPX, "url": "", "key_prefix": "", "env_url": "", "env_key": ""}
+    diag["env_url"] = "✅" if os.environ.get("SUPABASE_URL") else "❌"
+    diag["env_key"] = "✅" if os.environ.get("SUPABASE_KEY") else "❌"
+    try:
+        import streamlit as st
+        secrets_keys = list(st.secrets.keys()) if hasattr(st.secrets, "keys") else []
+        diag["secrets_keys"] = secrets_keys
+        url, key = _get_creds()
+        diag["url"]        = url[:40] + "..." if len(url) > 40 else url
+        diag["key_prefix"] = key[:20] + "..." if len(key) > 20 else key
+    except Exception as e:
+        diag["erro"] = str(e)
+    return diag
 
 def _headers():
     _, key = _get_creds()
