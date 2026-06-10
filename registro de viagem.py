@@ -60,8 +60,8 @@ DEFAULT_CONFIG = {
 
 MESES = ["Todos","Janeiro","Fevereiro","Marco","Abril","Maio","Junho",
          "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
-TIPOS_PASSAGEM   = ["Aereo","Rodoviario","Ferroviario","Maritimo","Outro"]
-TIPOS_TRANSPORTE = ["Uber","99","Taxi","Onibus","Metro","VLT","Trem","Outro"]
+TIPOS_PASSAGEM   = ["Aereo","Rodoviario","Ferroviario","Carro Próprio","Outro"]
+TIPOS_TRANSPORTE = ["Uber" ,"Taxi","Onibus","Metro","Trem","Outro"]
 
 # ── Helpers de segurança ──────────────────────────────────────────────────────
 def _hash_senha(txt: str, salt: bytes | None = None) -> tuple[str, str]:
